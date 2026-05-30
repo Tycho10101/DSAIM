@@ -1,11 +1,12 @@
 .msys2-home/
 .msys2-tmp/
 DSAIM.nds
-DSAIM.arm9
+arm7/build/
+arm7/DSAIM.elf
 arm9/DSAIM.elf
 arm9/build/
 arm9/lib/libfb/.msys2-home/
-arm9/lib/libfb/
+arm9/lib/libfb/.msys2-tmp/
 arm9/lib/libfb/build/
 arm9/lib/rTOC2/.msys2-home/
 arm9/lib/rTOC2/.msys2-tmp/
