@@ -218,19 +218,11 @@ int rMultiEditBox::rExecute(rKeyboard *kb)
     keyHit = rParseKey((unsigned char)keyHit);
     if (keyHit == (unsigned char)'\n')
     {
-        if (currentPlace == 0)
+        switch (currentPlace)
         {
-            currentPlace = 1;
-            update = true;
-        }
-        else
-        {
-            switch (currentPlace)
-            {
-                case 1: return D_OK; break;
-                case 2: return D_CANCEL; break;
-                default: return D_CONTINUE; break;
-            }
+            case 1: return D_OK; break;
+            case 2: return D_CANCEL; break;
+            default: return D_CONTINUE; break;
         }
     }
     return D_CONTINUE;
