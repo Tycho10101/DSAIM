@@ -1,0 +1,12 @@
+GUI/.msys2-home/
+GUI/.msys2-tmp/
+GUI/GUI.nds
+GUI/GUI.arm9
+GUI/arm9/GUI.arm9.elf
+GUI/arm9/build/
+GUI/arm9/lib/libfb/.msys2-home/
+GUI/arm9/lib/libfb/
+GUI/arm9/lib/libfb/build/
+GUI/arm9/lib/rTOC2/.msys2-home/
+GUI/arm9/lib/rTOC2/.msys2-tmp/
+GUI/arm9/lib/rTOC2/build/

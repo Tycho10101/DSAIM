@@ -1,0 +1,119 @@
+#---------------------------------------------------------------------------------
+.SUFFIXES:
+#---------------------------------------------------------------------------------
+ifeq ($(strip $(DEVKITPRO)),)
+$(error "Please set DEVKITPRO in your environment.")
+endif
+
+export DEVKITARM ?= $(DEVKITPRO)/devkitARM
+
+include $(DEVKITARM)/ds_rules
+
+#---------------------------------------------------------------------------------
+# BUILD is the directory where object files & intermediate files will be placed
+# SOURCES is a list of directories containing source code
+# INCLUDES is a list of directories containing extra header files
+# DATA is a list of directories containing binary files
+# all directories are relative to this makefile
+#---------------------------------------------------------------------------------
+BUILD		:=	build
+SOURCES		:=	source  
+INCLUDES	:=	include
+DATA		:=	data
+ARCH	:=	-march=armv5te -mtune=arm946e-s
+
+CFLAGS	:=	-g -Wall -O2 -ffunction-sections -fdata-sections \
+			$(ARCH) $(INCLUDE) -DARM9
+CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
+ASFLAGS	:=	-g $(ARCH)
+LDFLAGS	=	-specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+
+#---------------------------------------------------------------------------------
+# any extra libraries we wish to link with the project
+#---------------------------------------------------------------------------------
+LIBS	:= -lfb -ldswifi9 -lTOC -lnds9
+ 
+#---------------------------------------------------------------------------------
+# list of directories containing libraries, this must be the top level containing
+# include and lib
+#---------------------------------------------------------------------------------
+LIBDIRS	:=	$(LIBNDS) $(PORTLIBS) ../lib/libfb ../lib/rTOC2
+ 
+#---------------------------------------------------------------------------------
+# no real need to edit anything past this point unless you need to add additional
+# rules for different file extensions
+#---------------------------------------------------------------------------------
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+#---------------------------------------------------------------------------------
+ 
+export ARM9ELF	:=	$(CURDIR)/$(TARGET).elf
+export DEPSDIR := $(CURDIR)/$(BUILD)
+
+export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
+					$(foreach dir,$(DATA),$(CURDIR)/$(dir))
+ 
+CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
+SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+ 
+#---------------------------------------------------------------------------------
+# use CXX for linking C++ projects, CC for standard C
+#---------------------------------------------------------------------------------
+ifeq ($(strip $(CPPFILES)),)
+#---------------------------------------------------------------------------------
+	export LD	:=	$(CC)
+#---------------------------------------------------------------------------------
+else
+#---------------------------------------------------------------------------------
+	export LD	:=	$(CXX)
+#---------------------------------------------------------------------------------
+endif
+#---------------------------------------------------------------------------------
+
+export OFILES	:=	$(addsuffix .o,$(BINFILES)) \
+					$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+ 
+export INCLUDE	:=	$(foreach dir,$(INCLUDES),-iquote $(CURDIR)/$(dir)) \
+			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+			-I$(CURDIR)/$(BUILD)
+ 
+export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+ 
+.PHONY: $(BUILD) clean
+ 
+#---------------------------------------------------------------------------------
+$(BUILD):
+	@[ -d $@ ] || mkdir -p $@
+	@make --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+ 
+#---------------------------------------------------------------------------------
+clean:
+	@echo clean ...
+	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).nds *.bin 
+ 
+ 
+#---------------------------------------------------------------------------------
+else
+ 
+DEPENDS	:=	$(OFILES:.o=.d)
+ 
+#---------------------------------------------------------------------------------
+# main targets
+#---------------------------------------------------------------------------------
+$(ARM9ELF)	:	$(OFILES)
+
+#---------------------------------------------------------------------------------
+# you need a rule like this for each extension you use as binary data 
+#---------------------------------------------------------------------------------
+%.bin.o	:	%.bin
+#---------------------------------------------------------------------------------
+	@echo $(notdir $<)
+	@$(bin2o)
+
+
+-include $(DEPENDS)
+ 
+#---------------------------------------------------------------------------------------
+endif
+#---------------------------------------------------------------------------------------
