@@ -75,7 +75,7 @@ rTOC2::rTOC2()
     strcpy(tocServer, "aimexpress.oscar.aol.com");
     tocPort = 9898;
     strcpy(authServer, "login.oscar.aol.com");
-    authPort = 9898;
+    authPort = 5190;
     strcpy(language, "english");
     strcpy(version, "TIC:DSAIM 0.02e");;
     strcpy(user, "Ryan is the greatest!");
@@ -96,12 +96,17 @@ rTOC2::rTOC2()
     nickFunc = NULL;
     unknownFunc = NULL;
     getinfoFunc = NULL;
+    chatJoinFunc = NULL;
+    receiveChatFunc = NULL;
 
     receive = 0;
     isAway = isSpecialAway = false;
 
     sourceAway = false;
     memset(sourceUser, 0, BUDDYLEN-1);
+    sourceChatID = -1;
+    memset(sourceChatRoom, 0, sizeof(sourceChatRoom));
+    memset(updateChatBuddy, 0, sizeof(updateChatBuddy));
 
     buddyList = NULL;
 
@@ -118,6 +123,11 @@ rTOC2::rTOC2()
     isDisconnected = false;
     httpSock = 0;
     httpRetries = 0;
+    for (int i=0; i<32; i++)
+    {
+        chatRoomIDs[i] = -1;
+        memset(chatRoomNames[i], 0, sizeof(chatRoomNames[i]));
+    }
     //WPRINT("Constructor finished");
     
 }
@@ -734,6 +744,103 @@ void rTOC2::rLookupResponse(char *resp)
         strcpy(sysMessage, SystemMiscText[SYSTEM_MISC_TEXT_GOTIM] );
         sysMsgType = SERVER_IM_RECEIVED;
     } 
+    else if (strncmp(resp, "CHAT_JOIN:", 10) == 0)
+    {
+        char *pch;
+        pos = 10;
+        pch = strtok(&resp[pos], ":");
+        if (pch == NULL) return;
+        sourceChatID = atoi(pch);
+
+        pch = strtok(NULL, "\0");
+        if (pch == NULL) return;
+        strncpy(sourceChatRoom, pch, sizeof(sourceChatRoom) - 1);
+        sourceChatRoom[sizeof(sourceChatRoom) - 1] = '\0';
+        rSetChatRoom(sourceChatID, sourceChatRoom);
+        strcpy(sysMessage, sourceChatRoom);
+        sysMsgType = SERVER_CHAT_JOINED;
+    }
+    else if (strncmp(resp, "CHAT_IN:", 8) == 0)
+    {
+        char *pch;
+        pos = 8;
+        pch = strtok(&resp[pos], ":");
+        if (pch == NULL) return;
+        sourceChatID = atoi(pch);
+
+        pch = strtok(NULL, ":");
+        if (pch == NULL) return;
+        strncpy(sourceUser, pch, sizeof(sourceUser) - 1);
+        sourceUser[sizeof(sourceUser) - 1] = '\0';
+
+        pch = strtok(NULL, ":");
+        if (pch == NULL) return;
+
+        pch = strtok(NULL, "\0");
+        if (pch == NULL) return;
+        strncpy(currentIM, pch, sizeof(currentIM) - 1);
+        currentIM[sizeof(currentIM) - 1] = '\0';
+
+        const char *roomName = rGetChatRoomName(sourceChatID);
+        if (roomName != NULL)
+        {
+            strncpy(sourceChatRoom, roomName, sizeof(sourceChatRoom) - 1);
+            sourceChatRoom[sizeof(sourceChatRoom) - 1] = '\0';
+        }
+        else
+        {
+            sprintf(sourceChatRoom, "Chat %d", sourceChatID);
+        }
+        strcpy(sysMessage, sourceChatRoom);
+        sysMsgType = SERVER_CHAT_IN;
+    }
+    else if (strncmp(resp, "CHAT_IN_ENC:", 12) == 0)
+    {
+        char *pch;
+        pos = 12;
+        pch = strtok(&resp[pos], ":");
+        if (pch == NULL) return;
+        sourceChatID = atoi(pch);
+
+        pch = strtok(NULL, ":");
+        if (pch == NULL) return;
+        strncpy(sourceUser, pch, sizeof(sourceUser) - 1);
+        sourceUser[sizeof(sourceUser) - 1] = '\0';
+
+        pch = strtok(NULL, ":");
+        if (pch == NULL) return;
+
+        pch = strtok(NULL, ":");
+        if (pch == NULL) return;
+
+        pch = strtok(NULL, ":");
+        if (pch == NULL) return;
+
+        pch = strtok(NULL, "\0");
+        if (pch == NULL) return;
+        strncpy(currentIM, pch, sizeof(currentIM) - 1);
+        currentIM[sizeof(currentIM) - 1] = '\0';
+
+        const char *roomName = rGetChatRoomName(sourceChatID);
+        if (roomName != NULL)
+        {
+            strncpy(sourceChatRoom, roomName, sizeof(sourceChatRoom) - 1);
+            sourceChatRoom[sizeof(sourceChatRoom) - 1] = '\0';
+        }
+        else
+        {
+            sprintf(sourceChatRoom, "Chat %d", sourceChatID);
+        }
+        strcpy(sysMessage, sourceChatRoom);
+        sysMsgType = SERVER_CHAT_IN;
+    }
+    else if (strncmp(resp, "CHAT_UPDATE_BUDDY:", 18) == 0)
+    {
+        pos = 18;
+        strncpy(updateChatBuddy, &resp[pos], sizeof(updateChatBuddy) - 1);
+        updateChatBuddy[sizeof(updateChatBuddy) - 1] = '\0';
+        sysMsgType = SERVER_CHAT_UPDATE_BUDDY;
+    }
 
     else if (strncmp(resp, "EVILED:", 7) == 0)  //aah, we've been warned
     {
@@ -817,8 +924,53 @@ void rTOC2::rParseUpdateMessage(char *msg)
         if (pch[1] == 'C')  sourceStat |= (int)BUDDY_CELL;
     }
     if (buddyList)
-    	buddyList->setBuddyStat(sourceUser, sourceStat);
+        buddyList->setBuddyStat(sourceUser, sourceStat);
     LOG("exiting rParseUpdateMessage\r\n");
+}
+
+const char *rTOC2::rGetChatRoomName(int roomID)
+{
+    for (int i=0; i<32; i++)
+    {
+        if (chatRoomIDs[i] == roomID)
+            return chatRoomNames[i];
+    }
+    return NULL;
+}
+
+void rTOC2::rSetChatRoom(int roomID, const char *roomName)
+{
+    int emptySlot = -1;
+    for (int i=0; i<32; i++)
+    {
+        if (chatRoomIDs[i] == roomID)
+        {
+            strncpy(chatRoomNames[i], roomName, sizeof(chatRoomNames[i]) - 1);
+            chatRoomNames[i][sizeof(chatRoomNames[i]) - 1] = '\0';
+            return;
+        }
+        if (emptySlot == -1 && chatRoomIDs[i] == -1)
+            emptySlot = i;
+    }
+    if (emptySlot != -1)
+    {
+        chatRoomIDs[emptySlot] = roomID;
+        strncpy(chatRoomNames[emptySlot], roomName, sizeof(chatRoomNames[emptySlot]) - 1);
+        chatRoomNames[emptySlot][sizeof(chatRoomNames[emptySlot]) - 1] = '\0';
+    }
+}
+
+void rTOC2::rClearChatRoom(int roomID)
+{
+    for (int i=0; i<32; i++)
+    {
+        if (chatRoomIDs[i] == roomID)
+        {
+            chatRoomIDs[i] = -1;
+            chatRoomNames[i][0] = '\0';
+            return;
+        }
+    }
 }
 
 
@@ -943,7 +1095,7 @@ bool rTOC2::rListen(SERVER_MESSAGE_TYPES& msg)
             }
             case SERVER_IM_RECEIVED:
             {
-		char *Alias;
+                char *Alias;
                 char nameAndAlias[200];
 		int  id;
                 strcpy(nameAndAlias, sourceUser);
@@ -965,6 +1117,22 @@ bool rTOC2::rListen(SERVER_MESSAGE_TYPES& msg)
                 if (receiveFunc) (*receiveFunc)(nameAndAlias, currentIM, sourceAway); 
                 if (isAway)
                     rSendIM(sourceUser, awayMessage, true);
+                break;
+            }
+            case SERVER_CHAT_JOINED:
+            {
+                if (chatJoinFunc)
+                    (*chatJoinFunc)(sourceChatRoom, sourceChatID);
+                break;
+            }
+            case SERVER_CHAT_IN:
+            {
+                if (receiveChatFunc)
+                    (*receiveChatFunc)(sourceChatRoom, sourceUser, currentIM);
+                break;
+            }
+            case SERVER_CHAT_UPDATE_BUDDY:
+            {
                 break;
             }
             case SERVER_UNKNOWN_MESSAGE:
@@ -1159,6 +1327,62 @@ void rTOC2::rSendIM(const char *userName, const char *msg, const bool away)
     }
 }
 
+void rTOC2::rJoinChatRoom(const char *roomName)
+{
+    if (roomName == NULL || roomName[0] == '\0')
+        return;
+
+    strncpy(currentIM, roomName, sizeof(currentIM) - 1);
+    currentIM[sizeof(currentIM) - 1] = '\0';
+    sprintf(buffer, "toc_chat_join 4 \"%s\"", rEncode(currentIM));
+    strcpy(currentIM, buffer);
+    if (rSendFlap(PTYPE_DATA, currentIM) == -1)
+    {
+        if (errno != EWOULDBLOCK)
+        {
+            close(sock);
+            if (errorFunc) (*errorFunc)(0xFF, ErrorText[ERROR_TEXT_LOSTCONNECTION]);
+        }
+    }
+}
+
+void rTOC2::rSendChatRoom(const int roomID, const char *msg)
+{
+    if (roomID < 0 || msg == NULL || msg[0] == '\0')
+        return;
+
+    strncpy(currentIM, msg, sizeof(currentIM) - 1);
+    currentIM[sizeof(currentIM) - 1] = '\0';
+    sprintf(buffer, "toc_chat_send %d \"%s\"", roomID, rEncode(currentIM));
+    strcpy(currentIM, buffer);
+    if (rSendFlap(PTYPE_DATA, currentIM) == -1)
+    {
+        if (errno != EWOULDBLOCK)
+        {
+            close(sock);
+            if (errorFunc) (*errorFunc)(0xFF, ErrorText[ERROR_TEXT_LOSTCONNECTION]);
+        }
+    }
+}
+
+void rTOC2::rLeaveChatRoom(const int roomID)
+{
+    if (roomID < 0)
+        return;
+
+    sprintf(buffer, "toc_chat_leave %d", roomID);
+    strcpy(currentIM, buffer);
+    if (rSendFlap(PTYPE_DATA, currentIM) == -1)
+    {
+        if (errno != EWOULDBLOCK)
+        {
+            close(sock);
+            if (errorFunc) (*errorFunc)(0xFF, ErrorText[ERROR_TEXT_LOSTCONNECTION]);
+        }
+    }
+    rClearChatRoom(roomID);
+}
+
 void rTOC2::rAddBuddy(const char *userName)
 {
     char username[BUDDYLEN];
@@ -1238,6 +1462,22 @@ void rTOC2::rSetAway(const char *awayMsg)
     strcpy(currentIM, buffer);
     rSendFlap(PTYPE_DATA, currentIM);
     LOG("Sent away message flap\r\n");
+}
+
+void rTOC2::rSetAwayMessage(const char *awayMsg)
+{
+    if (awayMsg == NULL || awayMsg[0] == '\0')
+    {
+        awayMessage[0] = '\0';
+        if (isAway || isSpecialAway)
+            rSetAway(NULL);
+        return;
+    }
+
+    strncpy(awayMessage, awayMsg, sizeof(awayMessage) - 1);
+    awayMessage[sizeof(awayMessage) - 1] = '\0';
+    if (isAway || isSpecialAway)
+        rSetAway(awayMsg);
 }
 
 char *rTOC2::rEncode(char* buf)

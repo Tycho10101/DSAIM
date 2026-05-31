@@ -296,6 +296,8 @@ int main(void) {
                 client->rSetBuddyUpdateHandler(rConversationWindow::rOnBuddyUpdate);
                 client->rSetNickHandler(rConversationWindow::rOnNick);
                 client->rSetReceiveIMHandler(rConversationWindow::rOnReceiveIM);
+                client->rSetChatJoinHandler(rConversationWindow::rOnChatJoin);
+                client->rSetReceiveChatHandler(rConversationWindow::rOnReceiveChat);
                 client->rSetErrorHandler(rConversationWindow::rOnError);
                 client->rSetGetInfoHandler(rConversationWindow::rOnGetInfo);
                 chatwnd->rSetStatus(STATUS_NORMAL);

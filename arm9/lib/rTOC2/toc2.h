@@ -78,6 +78,9 @@ SERVER_NICK,				//Got user nickname
 
 SERVER_CONFIG_RECEIVED,              //Got a configuration
 SERVER_GET_INFO,                     //Requested user info
+SERVER_CHAT_JOINED,                  //Joined a chat room
+SERVER_CHAT_IN,                      //Received a chat room message
+SERVER_CHAT_UPDATE_BUDDY,            //Received a chat room member update
 SERVER_PAUSE,                        //Server request a pause
 SERVER_UNKNOWN_MESSAGE               //blank message //keep alive?
  
@@ -111,12 +114,18 @@ public:
     void    rSetNickHandler(void (func)(const char*))								{ nickFunc    = func; }
     void    rSetUnknownHandler(void (*func)(void))                                                                { unknownFunc = func; }
     void    rSetGetInfoHandler(void (*func)(const char*))                                                         { getinfoFunc = func; }
+    void    rSetChatJoinHandler(void (*func)(const char*, const int))                                             { chatJoinFunc = func; }
+    void    rSetReceiveChatHandler(void (*func)(const char*, const char*, const char*))                           { receiveChatFunc = func; }
 
     void    rSendIM(const char *, const char *, const bool away = false);
+    void    rJoinChatRoom(const char *);
+    void    rSendChatRoom(const int, const char *);
+    void    rLeaveChatRoom(const int);
     void    rAddBuddy(const char *);
     void    rWarn(const char *, bool anonymous = false);
     void    rBlock(const char *);
     void    rSetAway(const char*);
+    void    rSetAwayMessage(const char*);
     void    rGetInfo(const char*);
     int     rSimpleReadInfo(const char*);
     bool    rPollProfile();
@@ -158,6 +167,9 @@ private:
     void rLookupResponse(char *);
 
     void rParseUpdateMessage(char *); 
+    const char *rGetChatRoomName(int);
+    void rSetChatRoom(int, const char *);
+    void rClearChatRoom(int);
 
     void rClearMessages();
     void rAddMessages(char *, int);
@@ -214,9 +226,12 @@ private:
     unsigned int sourceIdle;
     int sourceStat;
     char sourceURL[250];
+    int sourceChatID;
+    char sourceChatRoom[128];
   
     char currentConfig[BUFLEN*2];
     char updateBuddy[128];
+    char updateChatBuddy[256];
 
 
     rBuddyList *buddyList;
@@ -235,6 +250,8 @@ private:
     void (*nickFunc)(const char*);
     void (*unknownFunc)(void);
     void (*getinfoFunc)(const char*);
+    void (*chatJoinFunc)(const char*, const int);
+    void (*receiveChatFunc)(const char*, const char*, const char*);
 
     
     int httpSock;
@@ -242,6 +259,8 @@ private:
     char httpInfo[BUFLEN]; //where the info is stored
     int  httpRetries;
     char httpURL[200];
+    int  chatRoomIDs[32];
+    char chatRoomNames[32][128];
 
 };
 

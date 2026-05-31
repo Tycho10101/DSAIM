@@ -67,6 +67,8 @@ public:
     static void rOnBuddyUpdate(const char*, const int, const char*, const char*, const int);
     static void rOnGetInfo(const char*);
     static void rOnReceiveIM(const char*, const char*, const bool);
+    static void rOnChatJoin(const char*, const int);
+    static void rOnReceiveChat(const char*, const char*, const char*);
     static void rOnNick(const char*);
     static void rOnError(const int, const char*);
     void debugMenu();
@@ -74,8 +76,14 @@ public:
 private:
     void rDoSignOff(bool);
     void rDoSendIM();
+    void rDoJoinChatRoom();
     void rDoGetInfo();
     void rDoAwayMessage();
+    int  rFindConversation(const char *);
+    bool rIsChatRoomConversation(int);
+    int  rGetRoomID(int);
+    void rAddChatRoom(char *, int);
+    void rAddChatRoomMessage(char *, char *, char *);
     void rParseHTML(char *data);
 
 #ifdef USEWIFI
@@ -99,6 +107,9 @@ private:
 
     char username[50];
     char password[50];
+    char chatRoomNames[MAXCONVO][128];
+    int  chatRoomIDs[MAXCONVO];
+    bool chatRoomMode[MAXCONVO];
 
     int currentStatus;
 };

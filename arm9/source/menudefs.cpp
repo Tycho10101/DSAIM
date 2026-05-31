@@ -4,9 +4,9 @@ char *OptionsMenuText[] = {
     "DSAIM Options",
     "",
     "Send an IM",
+    "Join Chatroom",
     "Get User Info",
     "Set Away Message",
-    "Remove Away Message",
     "Sign Off",
     "Exit" };
 
@@ -27,6 +27,7 @@ char *DialogText[] = {
     "Are you sure you want to sign off?",
     "Enter away message. (Blank for return)",
     "Enter screen name to send to.",
+    "Enter chatroom to join.",
     "Enter screen name to get profile." 
 };
 

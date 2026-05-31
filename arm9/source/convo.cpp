@@ -31,7 +31,12 @@ rConversationWindow::rConversationWindow()
     //WPRINT("Creating textdisplay");
     convos = new rTextDisplay*[MAXCONVO];
     for (int i=0; i<MAXCONVO; i++)
+    {
         convos[i] = NULL;
+        chatRoomNames[i][0] = '\0';
+        chatRoomIDs[i] = -1;
+        chatRoomMode[i] = false;
+    }
     //WPRINT("Creating input");
     input = new rUserInput();
     //WPRINT("Creating chatlist");
@@ -64,7 +69,12 @@ rConversationWindow::rConversationWindow(int max)
     //WPRINT("Creating textdisplay");
     convos = new rTextDisplay*[max];
     for (int i=0; i<max; i++)
+    {
         convos[i] = NULL;
+        chatRoomNames[i][0] = '\0';
+        chatRoomIDs[i] = -1;
+        chatRoomMode[i] = false;
+    }
     //WPRINT("Creating input");
     input = new rUserInput();
     //WPRINT("Creating chatlist");
@@ -92,6 +102,118 @@ rConversationWindow::~rConversationWindow()
     delete buddylist;
 }
 
+int rConversationWindow::rFindConversation(const char *name)
+{
+    if (name == NULL)
+        return -1;
+    for (int i=0; i<totalConversations; i++)
+    {
+        if (convos[i] != NULL && strcasecmp(name, convos[i]->getID()) == 0)
+            return i;
+    }
+    return -1;
+}
+
+bool rConversationWindow::rIsChatRoomConversation(int index)
+{
+    if (index < 0 || index >= maxConversations)
+        return false;
+    return chatRoomMode[index];
+}
+
+int rConversationWindow::rGetRoomID(int index)
+{
+    if (!rIsChatRoomConversation(index))
+        return -1;
+    return chatRoomIDs[index];
+}
+
+void rConversationWindow::rAddChatRoom(char *roomName, int roomID)
+{
+    char displayName[128];
+    if (roomName == NULL || roomName[0] == '\0')
+        return;
+
+    snprintf(displayName, sizeof(displayName), "#%s", roomName);
+    const int existing = rFindConversation(displayName);
+    if (existing >= 0)
+    {
+        chatRoomMode[existing] = true;
+        if (roomID >= 0)
+            chatRoomIDs[existing] = roomID;
+        strncpy(chatRoomNames[existing], roomName, sizeof(chatRoomNames[existing]) - 1);
+        chatRoomNames[existing][sizeof(chatRoomNames[existing]) - 1] = '\0';
+        update = true;
+        return;
+    }
+
+    for (int i=0; i<maxConversations; i++)
+    {
+        if (convos[i] == NULL)
+        {
+            convos[i] = new rTextDisplay();
+            convos[i]->setID(displayName);
+            convos[i]->setFont((uint16**)font);
+            chatRoomMode[i] = true;
+            chatRoomIDs[i] = roomID;
+            strncpy(chatRoomNames[i], roomName, sizeof(chatRoomNames[i]) - 1);
+            chatRoomNames[i][sizeof(chatRoomNames[i]) - 1] = '\0';
+            chatList->rAddUser(displayName);
+            chatList->rSetColor(0, displayName);
+            totalConversations++;
+            rSetActive(displayName);
+            update = true;
+            return;
+        }
+    }
+}
+
+void rConversationWindow::rAddChatRoomMessage(char *roomName, char *who, char *msg)
+{
+    char displayName[128];
+    char sender[200];
+    char *sMsg;
+    char *line;
+    int lineLen;
+    int idx;
+    if (roomName == NULL || who == NULL || msg == NULL)
+        return;
+
+    snprintf(displayName, sizeof(displayName), "#%s", roomName);
+    idx = rFindConversation(displayName);
+    if (idx < 0)
+    {
+        rAddChatRoom(roomName, -1);
+        idx = rFindConversation(displayName);
+    }
+
+    sMsg = new char[strlen(msg) + 1];
+    strcpy(sMsg, msg);
+    convoInstance->rParseHTML(sMsg);
+
+    strncpy(sender, who, sizeof(sender) - 1);
+    sender[sizeof(sender) - 1] = '\0';
+
+    lineLen = strlen(sender) + strlen(sMsg) + 10;
+    line = new char[lineLen];
+    if (!rUtilities::rNormalizeCompare(sender, username))
+        sprintf(line, "%c%s: %s", COLOR_BLUE, sender, sMsg);
+    else
+        sprintf(line, "%c%s: %s", COLOR_RED, sender, sMsg);
+
+    if (idx >= 0 && convos[idx] != NULL)
+    {
+        convos[idx]->addText(line);
+        if (idx != currentConversation)
+            chatList->rSetColor(RGB15(31,0,0), displayName);
+        else
+            chatList->rSetColor(0, displayName);
+        update = true;
+    }
+    delete []line;
+    delete []sMsg;
+}
+
 int rConversationWindow::rAddMessage(char *who, char *msg, bool away)
 {
     bool found = false;
@@ -107,17 +229,22 @@ int rConversationWindow::rAddMessage(char *who, char *msg, bool away)
             if (msg == NULL) //user is adding the message after hitting send
             {
                 msg = input->rFormat();
-                if (strlen(msg) > 0)
+                if (strlen(msg) > 0 && !chatRoomMode[i])
                 {
                     char *nameAndMsg = new char[strlen(username)+strlen(msg)+10];
                     sprintf(nameAndMsg, "%c%s: %s", COLOR_BLUE, username, msg); 
                     convos[i]->addText(nameAndMsg);
                     delete []nameAndMsg;
                 }
-		if (*client != NULL)
+                if (*client != NULL)
                 {
                     if (strlen(msg) > 0)
-		        (*client)->rSendIM(userNoAlias, msg);
+                    {
+                        if (chatRoomMode[i])
+                            (*client)->rSendChatRoom(chatRoomIDs[i], msg);
+                        else
+                            (*client)->rSendIM(userNoAlias, msg);
+                    }
                 }
                 delete []msg;
                 convos[i]->clearInput();
@@ -167,7 +294,10 @@ int rConversationWindow::rAddMessage(char *who, char *msg, bool away)
                 convos[i] = new rTextDisplay();
                 convos[i]->setID(who);
                 convos[i]->setFont((uint16**)font);
-        	chatList->rAddUser(who);
+                chatRoomMode[i] = false;
+                chatRoomIDs[i] = -1;
+                chatRoomNames[i][0] = '\0';
+                chatList->rAddUser(who);
                 if (msg[0] != '\0') //Message from a new user
                 { 
                     char *nameAndMsg;
@@ -203,13 +333,24 @@ void rConversationWindow::rKillConversation(char *name)
     {
         if (strcasecmp(name, convos[i]->getID()) == 0)
         {
+            if (chatRoomMode[i] && *client != NULL && chatRoomIDs[i] >= 0)
+                (*client)->rLeaveChatRoom(chatRoomIDs[i]);
             chatList->rKillUser(name);
             delete convos[i];
-	    update = true;
+            chatRoomMode[i] = false;
+            chatRoomIDs[i] = -1;
+            chatRoomNames[i][0] = '\0';
+            update = true;
             for (int j=i; j<maxConversations-1; j++)
             {
                 convos[j] = convos[j+1];
                 convos[j+1] = NULL;
+                chatRoomMode[j] = chatRoomMode[j+1];
+                chatRoomIDs[j] = chatRoomIDs[j+1];
+                strcpy(chatRoomNames[j], chatRoomNames[j+1]);
+                chatRoomMode[j+1] = false;
+                chatRoomIDs[j+1] = -1;
+                chatRoomNames[j+1][0] = '\0';
             }
             int k;
             currentConversation = -1;
@@ -241,6 +382,9 @@ void rConversationWindow::rKillAllConversations()
             delete convos[i];
             convos[i] = NULL;
         }
+        chatRoomMode[i] = false;
+        chatRoomIDs[i] = -1;
+        chatRoomNames[i][0] = '\0';
     }
     update = true;
     currentConversation = -1;
@@ -422,7 +566,8 @@ int rConversationWindow::rParseMainKey(int key, bool *pickup)
         activeMenu->rAddOption(OptionsMenuText[2], 0);
         activeMenu->rAddOption(OptionsMenuText[3], 1);
         activeMenu->rAddOption(OptionsMenuText[4], 2);
-        activeMenu->rAddOption(OptionsMenuText[6], 3);
+        activeMenu->rAddOption(OptionsMenuText[5], 3);
+        activeMenu->rAddOption(OptionsMenuText[6], 4);
         activeMenu->rAddOption(OptionsMenuText[7], D_CANCEL);
         return key;
     }
@@ -467,14 +612,14 @@ int rConversationWindow::rParseMainKey(int key, bool *pickup)
             input->rClear();
             return true;
         case (unsigned char)rKey::KEY_WARN:
-            if (w != NULL)
+            if (w != NULL && !rIsChatRoomConversation(currentConversation))
             {
                 rUtilities::rParseUsername(w, userNoAlias, alias);
                 (*client)->rWarn(userNoAlias, false);
             }
             break;
         case (unsigned char)rKey::KEY_BLOCK:
-            if (w != NULL)
+            if (w != NULL && !rIsChatRoomConversation(currentConversation))
             {
                 rUtilities::rParseUsername(w, userNoAlias, alias);
                 (*client)->rBlock(userNoAlias);
@@ -532,7 +677,9 @@ int rConversationWindow::rParseBuddyKey(int key, int x, int y, bool *pickup)
     {
         char alias[100];
         char userNoAlias[100];
-        name = chatList->rGetCurrentUser();
+        name = NULL;
+        if (!rIsChatRoomConversation(currentConversation))
+            name = chatList->rGetCurrentUser();
         if (name == NULL)
             name = buddylist->rGetCurrentBuddy();
         if (name != NULL)
@@ -708,19 +855,42 @@ void rConversationWindow::rOnBuddyUpdate(const char* theGroup, const int gID, co
 void rConversationWindow::rOnReceiveIM(const char* who, const char* msg, const bool away)
 {
     char sBuddy[200];
-    char sMsg[5000];
+    char *sMsg;
+    sMsg = new char[strlen(msg) + 1];
     strcpy(sMsg, msg);
     strcpy(sBuddy, who);
     convoInstance->rParseHTML(sMsg);
-    convoInstance->rAddMessage(sBuddy, sMsg, away); 
+    convoInstance->rAddMessage(sBuddy, sMsg, away);
+    delete []sMsg;
+}
+
+void rConversationWindow::rOnChatJoin(const char* roomName, const int roomID)
+{
+    char sRoom[128];
+    strncpy(sRoom, roomName, sizeof(sRoom) - 1);
+    sRoom[sizeof(sRoom) - 1] = '\0';
+    convoInstance->rAddChatRoom(sRoom, roomID);
+}
+
+void rConversationWindow::rOnReceiveChat(const char* roomName, const char* who, const char* msg)
+{
+    char sRoom[128];
+    char sWho[200];
+    strncpy(sRoom, roomName, sizeof(sRoom) - 1);
+    sRoom[sizeof(sRoom) - 1] = '\0';
+    strncpy(sWho, who, sizeof(sWho) - 1);
+    sWho[sizeof(sWho) - 1] = '\0';
+    convoInstance->rAddChatRoomMessage(sRoom, sWho, (char*)msg);
 }
 
 void rConversationWindow::rOnGetInfo(const char* info)
 {
-    char sMsg[5000];
+    char *sMsg;
+    sMsg = new char[strlen(info) + 1];
     strcpy(sMsg, info);
     convoInstance->rParseHTML(sMsg);
     convoInstance->rDisplayProfile(sMsg);
+    delete []sMsg;
 }
 
 void rConversationWindow::rOnNick(const char *name)
@@ -767,13 +937,16 @@ void rConversationWindow::rMenuDone(const int retValue, const int menu)
                 case 0: //User selected to send an IM!
                     rDoSendIM();
                     break;
-                case 1: //User selected to get user info!
+                case 1: //User selected to join a chatroom!
+                    rDoJoinChatRoom();
+                    break;
+                case 2: //User selected to get user info!
                     rDoGetInfo();
                     break;
-                case 2: //User selected to set away message!
+                case 3: //User selected to set away message!
                     rDoAwayMessage();
                     break;
-                case 3: //User selected to sign off!
+                case 4: //User selected to sign off!
                     rDoSignOff(true);
                     break;
                 default: break;
@@ -854,6 +1027,23 @@ void rConversationWindow::rEditBoxDone(const int retValue, const int dialog, con
                 rAddMessage(theAlias, "\0"); //add an empty message
             }
         break;
+        case EDITBOX_JOINCHAT:
+            strcpy(name, txt);
+            if (retValue == D_OK)
+            {
+                bool hasVisibleText = false;
+                for (int i = 0; name[i] != '\0'; i++)
+                {
+                    if (name[i] != ' ' && name[i] != '\t' && name[i] != '\r' && name[i] != '\n')
+                    {
+                        hasVisibleText = true;
+                        break;
+                    }
+                }
+                if (hasVisibleText)
+                    (*client)->rJoinChatRoom(name);
+            }
+        break;
         case EDITBOX_GETINFO:
             strcpy(name, txt);
             if (retValue == D_OK)
@@ -882,7 +1072,7 @@ void rConversationWindow::rMultiEditBoxDone(const int retValue, const int dialog
                     }
                 }
                 if (hasVisibleText)
-                    (*client)->rSetAway(txt);
+                    (*client)->rSetAwayMessage(txt);
                 else
                     (*client)->rSetAway(NULL);
             }
@@ -922,6 +1112,13 @@ void rConversationWindow::rDoSendIM()
     if (activeEditBox)
         delete activeEditBox;
     activeEditBox = new rEditBox(DialogText[DIALOG_TEXT_SENDIM], OKCancelText[0], OKCancelText[1], 10, 10, 100, EDITBOX_SENDIM, (uint16**)convoInstance->font);
+}
+
+void rConversationWindow::rDoJoinChatRoom()
+{
+    if (activeEditBox)
+        delete activeEditBox;
+    activeEditBox = new rEditBox(DialogText[DIALOG_TEXT_JOINCHAT], OKCancelText[0], OKCancelText[1], 10, 10, 100, EDITBOX_JOINCHAT, (uint16**)convoInstance->font);
 }
 
 void rConversationWindow::rDoGetInfo()
