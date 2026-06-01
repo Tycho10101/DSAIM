@@ -120,6 +120,10 @@ enum {
     EDITBOX_INPUT_USERGATEWAY,
     EDITBOX_INPUT_DNS1,
     EDITBOX_INPUT_DNS2,
+    EDITBOX_INPUT_TOC_SERVER,
+    EDITBOX_INPUT_TOC_PORT,
+    EDITBOX_INPUT_AUTH_SERVER,
+    EDITBOX_INPUT_AUTH_PORT,
 
     LISTBOX_GETINFO,
     LISTBOX_BROWSE_AP,
@@ -133,8 +137,9 @@ enum {
 #define NETWORK_BROWSE_AP           0
 #define NETWORK_INPUT_AP            1
 #define NETWORK_USE_FIRMWARE        2
-#define NETWORK_64BIT_WEP           3
-#define NETWORK_128BIT_WEP          4
+#define NETWORK_CONFIG_SERVERS      3
+#define NETWORK_64BIT_WEP           4
+#define NETWORK_128BIT_WEP          5
 
 #define IP_STATIC                   0
 #define IP_DHCP_STATIC_DNS          1

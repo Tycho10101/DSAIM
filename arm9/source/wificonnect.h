@@ -31,6 +31,10 @@ enum {
     NET_STEP_DNS_PRIMARY,
     NET_STEP_DNS_SECONDARY,
     NET_STEP_DNS_INVALID,
+    NET_STEP_SERVER_TOC_HOST,
+    NET_STEP_SERVER_TOC_PORT,
+    NET_STEP_SERVER_AUTH_HOST,
+    NET_STEP_SERVER_AUTH_PORT,
     NET_STEP_COMPLETE,
     NET_STEP_CANCEL,
     NET_STEP_NOTRUNNING
@@ -74,6 +78,10 @@ public:
 
     static void rDoEnterDNSPrimary(unsigned short int**);
     static void rDoEnterDNSSecondary(unsigned short int**);
+    static void rDoEnterTOCServer(unsigned short int**, bool invalid = false);
+    static void rDoEnterTOCPort(unsigned short int**, bool invalid = false);
+    static void rDoEnterAuthServer(unsigned short int**, bool invalid = false);
+    static void rDoEnterAuthPort(unsigned short int**, bool invalid = false);
 
     static void rDoSetupCompleteDialog(unsigned short int**);
 

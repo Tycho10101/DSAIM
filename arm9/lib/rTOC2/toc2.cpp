@@ -48,6 +48,23 @@
 namespace {
 
 static const int kLoginHandshakeTimeoutSec = 8;
+static char gDefaultTocServer[128] = "aimexpress.oscar.aol.com";
+static int gDefaultTocPort = 9898;
+static char gDefaultAuthServer[128] = "login.oscar.aol.com";
+static int gDefaultAuthPort = 5190;
+
+void copyServerValue(char *dest, size_t destSize, const char *src)
+{
+    if (!dest || destSize == 0)
+        return;
+    if (!src)
+    {
+        dest[0] = '\0';
+        return;
+    }
+    strncpy(dest, src, destSize - 1);
+    dest[destSize - 1] = '\0';
+}
 
 bool waitForReadable(int sock, int timeoutSec)
 {
@@ -72,10 +89,10 @@ rTOC2::rTOC2()
 {
     tocInstance = this;
     memset(buffer, 0, BUFLEN-1);
-    strcpy(tocServer, "aimexpress.oscar.aol.com");
-    tocPort = 9898;
-    strcpy(authServer, "login.oscar.aol.com");
-    authPort = 5190;
+    copyServerValue(tocServer, sizeof(tocServer), gDefaultTocServer);
+    tocPort = gDefaultTocPort;
+    copyServerValue(authServer, sizeof(authServer), gDefaultAuthServer);
+    authPort = gDefaultAuthPort;
     strcpy(language, "english");
     strcpy(version, "TIC:DSAIM 0.02e");;
     strcpy(user, "Ryan is the greatest!");
@@ -130,6 +147,47 @@ rTOC2::rTOC2()
     }
     //WPRINT("Constructor finished");
     
+}
+
+void rTOC2::rSetServers(const char *newTocServer, int newTocPort, const char *newAuthServer, int newAuthPort)
+{
+    if (newTocServer && newTocServer[0] != '\0')
+        copyServerValue(tocServer, sizeof(tocServer), newTocServer);
+    if (newTocPort > 0)
+        tocPort = newTocPort;
+    if (newAuthServer && newAuthServer[0] != '\0')
+        copyServerValue(authServer, sizeof(authServer), newAuthServer);
+    if (newAuthPort > 0)
+        authPort = newAuthPort;
+}
+
+void rTOC2::rApplyDefaultServers()
+{
+    rSetServers(gDefaultTocServer, gDefaultTocPort, gDefaultAuthServer, gDefaultAuthPort);
+}
+
+void rTOC2::rSetDefaultServers(const char *newTocServer, int newTocPort, const char *newAuthServer, int newAuthPort)
+{
+    if (newTocServer && newTocServer[0] != '\0')
+        copyServerValue(gDefaultTocServer, sizeof(gDefaultTocServer), newTocServer);
+    if (newTocPort > 0)
+        gDefaultTocPort = newTocPort;
+    if (newAuthServer && newAuthServer[0] != '\0')
+        copyServerValue(gDefaultAuthServer, sizeof(gDefaultAuthServer), newAuthServer);
+    if (newAuthPort > 0)
+        gDefaultAuthPort = newAuthPort;
+}
+
+void rTOC2::rGetDefaultServers(char *outTocServer, int *outTocPort, char *outAuthServer, int *outAuthPort)
+{
+    if (outTocServer)
+        copyServerValue(outTocServer, sizeof(gDefaultTocServer), gDefaultTocServer);
+    if (outTocPort)
+        *outTocPort = gDefaultTocPort;
+    if (outAuthServer)
+        copyServerValue(outAuthServer, sizeof(gDefaultAuthServer), gDefaultAuthServer);
+    if (outAuthPort)
+        *outAuthPort = gDefaultAuthPort;
 }
 
 rTOC2::~rTOC2() 

@@ -127,6 +127,10 @@ public:
     void    rSetAway(const char*);
     void    rSetAwayMessage(const char*);
     void    rGetInfo(const char*);
+    void    rSetServers(const char *, int, const char *, int);
+    void    rApplyDefaultServers();
+    static void rSetDefaultServers(const char *, int, const char *, int);
+    static void rGetDefaultServers(char *, int *, char *, int *);
     int     rSimpleReadInfo(const char*);
     bool    rPollProfile();
     void    rDisconnect();
@@ -190,9 +194,9 @@ private:
     bool  isAway;
     bool  isSpecialAway;
     struct msgList **messageList;
-    char  tocServer[30];
+    char  tocServer[128];
     int   tocPort;
-    char  authServer[30];
+    char  authServer[128];
     int   authPort;
     char  language[15];
     char  version[50];

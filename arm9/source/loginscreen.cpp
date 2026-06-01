@@ -196,6 +196,7 @@ int rLoginScreen::rExecute(rKeyboard *kb)
             break;
         case 4:
             int connectStatus;
+            (*client)->rApplyDefaultServers();
             connectStatus = (*client)->rConnect(rGetUsername(), rGetPassword());
             if (connectStatus == SERVER_ERROR_UNKNOWN)
             {

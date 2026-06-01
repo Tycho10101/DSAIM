@@ -64,7 +64,8 @@ char *NetworkSetupText[] = {
     "1. Browse for access points.",
     "2. Manual SSID entry is not supported.",
     "2. Use network settings from firmware.",
-    "3. Exit network setup.",
+    "3. Configure AIM server settings.",
+    "4. Exit network setup.",
     
     "Connect to AP:", //6
     
@@ -106,6 +107,14 @@ char *NetworkSetupText[] = {
     "Please enter your Secondary DNS Address (xxx.xxx.xxx.xxx)", //31
     "The specified DNS is invalid.  Please enter another DNS", //32
     "Network setup is complete.  Good Chatting!", //33
+    "Enter TOC server hostname or IP.", //34
+    "Invalid TOC server. Enter hostname or IP.", //35
+    "Enter TOC server port (1-65535).", //36
+    "Invalid TOC server port (1-65535).", //37
+    "Enter auth server hostname or IP.", //38
+    "Invalid auth server. Enter hostname or IP.", //39
+    "Enter auth server port (1-65535).", //40
+    "Invalid auth server port (1-65535).", //41
     "end"
     
 

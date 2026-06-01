@@ -32,6 +32,10 @@ static const int kConnectFailureTimeoutFrames = 15 * 60;
 static const char kConnectivityTestHost[] = "example.com";
 static const int kConnectivityTestPort = 80;
 static const int kConnectivityTestTimeoutSec = 3;
+static char gPendingTocServer[128];
+static int gPendingTocPort = 9898;
+static char gPendingAuthServer[128];
+static int gPendingAuthPort = 5190;
 
 struct WifiSelection {
     WlanBssDesc bss;
@@ -67,6 +71,48 @@ bool isWpaAuth(WlanBssAuthType type)
            type == WlanBssAuthType_WPA2_PSK_TKIP ||
            type == WlanBssAuthType_WPA_PSK_AES ||
            type == WlanBssAuthType_WPA2_PSK_AES;
+}
+
+void trimWhitespace(char *text)
+{
+    int start = 0;
+    int end;
+    if (!text)
+        return;
+    while (text[start] == ' ' || text[start] == '\t' || text[start] == '\r' || text[start] == '\n')
+        start++;
+    if (start > 0)
+        memmove(text, &text[start], strlen(&text[start]) + 1);
+    end = (int)strlen(text) - 1;
+    while (end >= 0 && (text[end] == ' ' || text[end] == '\t' || text[end] == '\r' || text[end] == '\n'))
+        text[end--] = '\0';
+}
+
+bool isValidServerHost(char *host)
+{
+    trimWhitespace(host);
+    return host && host[0] != '\0';
+}
+
+bool parseServerPort(char *text, int &outPort)
+{
+    char *endPtr;
+    long value;
+    trimWhitespace(text);
+    if (!text || text[0] == '\0')
+        return false;
+    value = strtol(text, &endPtr, 10);
+    if (*endPtr != '\0')
+        return false;
+    if (value < 1 || value > 65535)
+        return false;
+    outPort = (int)value;
+    return true;
+}
+
+void loadPendingServerSettings()
+{
+    rTOC2::rGetDefaultServers(gPendingTocServer, &gPendingTocPort, gPendingAuthServer, &gPendingAuthPort);
 }
 
 const char *authLabel(WlanBssAuthType type)
@@ -446,6 +492,11 @@ int rWifiConnect::rCheckNetSetupStep(int stat, unsigned short int** fnt, void* e
                     setupStep = NET_STEP_COMPLETE;
                     rDoSetupCompleteDialog(fnt);
                     break;
+                case NETWORK_CONFIG_SERVERS:
+                    loadPendingServerSettings();
+                    setupStep = NET_STEP_SERVER_TOC_HOST;
+                    rDoEnterTOCServer(fnt);
+                    break;
                 default:
                     break;
             }
@@ -526,6 +577,79 @@ int rWifiConnect::rCheckNetSetupStep(int stat, unsigned short int** fnt, void* e
             isConnecting = false;
             setupStep = NET_STEP_NOTRUNNING;
             return -1;
+        } break;
+
+        case NET_STEP_SERVER_TOC_HOST:
+        {
+            if (stat == D_CANCEL)
+            {
+                setupStep = NET_STEP_AP_MENU;
+                rDoAPSetupMenu(fnt);
+                break;
+            }
+            if (!extra || !isValidServerHost((char*)extra))
+            {
+                rDoEnterTOCServer(fnt, true);
+                break;
+            }
+            strncpy(gPendingTocServer, (char*)extra, sizeof(gPendingTocServer) - 1);
+            gPendingTocServer[sizeof(gPendingTocServer) - 1] = '\0';
+            setupStep = NET_STEP_SERVER_TOC_PORT;
+            rDoEnterTOCPort(fnt);
+        } break;
+
+        case NET_STEP_SERVER_TOC_PORT:
+        {
+            if (stat == D_CANCEL)
+            {
+                setupStep = NET_STEP_SERVER_TOC_HOST;
+                rDoEnterTOCServer(fnt);
+                break;
+            }
+            if (!extra || !parseServerPort((char*)extra, gPendingTocPort))
+            {
+                rDoEnterTOCPort(fnt, true);
+                break;
+            }
+            setupStep = NET_STEP_SERVER_AUTH_HOST;
+            rDoEnterAuthServer(fnt);
+        } break;
+
+        case NET_STEP_SERVER_AUTH_HOST:
+        {
+            if (stat == D_CANCEL)
+            {
+                setupStep = NET_STEP_SERVER_TOC_PORT;
+                rDoEnterTOCPort(fnt);
+                break;
+            }
+            if (!extra || !isValidServerHost((char*)extra))
+            {
+                rDoEnterAuthServer(fnt, true);
+                break;
+            }
+            strncpy(gPendingAuthServer, (char*)extra, sizeof(gPendingAuthServer) - 1);
+            gPendingAuthServer[sizeof(gPendingAuthServer) - 1] = '\0';
+            setupStep = NET_STEP_SERVER_AUTH_PORT;
+            rDoEnterAuthPort(fnt);
+        } break;
+
+        case NET_STEP_SERVER_AUTH_PORT:
+        {
+            if (stat == D_CANCEL)
+            {
+                setupStep = NET_STEP_SERVER_AUTH_HOST;
+                rDoEnterAuthServer(fnt);
+                break;
+            }
+            if (!extra || !parseServerPort((char*)extra, gPendingAuthPort))
+            {
+                rDoEnterAuthPort(fnt, true);
+                break;
+            }
+            rTOC2::rSetDefaultServers(gPendingTocServer, gPendingTocPort, gPendingAuthServer, gPendingAuthPort);
+            setupStep = NET_STEP_AP_MENU;
+            rDoAPSetupMenu(fnt);
         } break;
 
         default:
@@ -609,7 +733,8 @@ void rWifiConnect::rDoAPSetupMenu(unsigned short int** fnt)
     activeMenu = new rMenu(NetworkSetupText[0], NetworkSetupText[1], 10, 10, MENU_NETWORK_SETUP, (uint16**)fnt);
     activeMenu->rAddOption(NetworkSetupText[2], NETWORK_BROWSE_AP);
     activeMenu->rAddOption(NetworkSetupText[4], NETWORK_USE_FIRMWARE);
-    activeMenu->rAddOption(NetworkSetupText[5], D_CANCEL);
+    activeMenu->rAddOption(NetworkSetupText[5], NETWORK_CONFIG_SERVERS);
+    activeMenu->rAddOption(NetworkSetupText[6], D_CANCEL);
 }
 
 void rWifiConnect::rDoAPBrowseList(unsigned short int **fnt)
@@ -632,7 +757,7 @@ void rWifiConnect::rDoAPSelectConfirmDialog(unsigned short int **fnt)
 
     memcpy(ssid, selectedAp.ssid, selectedAp.ssid_len);
     ssid[(int)selectedAp.ssid_len] = '\0';
-    sprintf(msg, "%s %s?", NetworkSetupText[6], selectedAp.ssid_len ? ssid : "<hidden>");
+    sprintf(msg, "%s %s?", NetworkSetupText[7], selectedAp.ssid_len ? ssid : "<hidden>");
 
     if (activeDialog)
         delete activeDialog;
@@ -655,7 +780,7 @@ void rWifiConnect::rDoEnterWepKey(unsigned short int **fnt)
     if (activeEditBox)
         delete activeEditBox;
 
-    activeEditBox = new rEditBox(NetworkSetupText[13], OKCancelText[0], OKCancelText[1], 10, 10, 100, EDITBOX_INPUT_WEP, fnt);
+    activeEditBox = new rEditBox(NetworkSetupText[14], OKCancelText[0], OKCancelText[1], 10, 10, 100, EDITBOX_INPUT_WEP, fnt);
 }
 
 void rWifiConnect::rDoEnterDNSPrimary(unsigned short int** fnt)
@@ -666,6 +791,34 @@ void rWifiConnect::rDoEnterDNSPrimary(unsigned short int** fnt)
 void rWifiConnect::rDoEnterDNSSecondary(unsigned short int** fnt)
 {
     rDoSetupCompleteDialog(fnt);
+}
+
+void rWifiConnect::rDoEnterTOCServer(unsigned short int **fnt, bool invalid)
+{
+    if (activeEditBox)
+        delete activeEditBox;
+    activeEditBox = new rEditBox(invalid ? NetworkSetupText[36] : NetworkSetupText[35], OKCancelText[0], OKCancelText[1], 10, 10, 150, EDITBOX_INPUT_TOC_SERVER, fnt);
+}
+
+void rWifiConnect::rDoEnterTOCPort(unsigned short int **fnt, bool invalid)
+{
+    if (activeEditBox)
+        delete activeEditBox;
+    activeEditBox = new rEditBox(invalid ? NetworkSetupText[38] : NetworkSetupText[37], OKCancelText[0], OKCancelText[1], 10, 10, 80, EDITBOX_INPUT_TOC_PORT, fnt);
+}
+
+void rWifiConnect::rDoEnterAuthServer(unsigned short int **fnt, bool invalid)
+{
+    if (activeEditBox)
+        delete activeEditBox;
+    activeEditBox = new rEditBox(invalid ? NetworkSetupText[40] : NetworkSetupText[39], OKCancelText[0], OKCancelText[1], 10, 10, 150, EDITBOX_INPUT_AUTH_SERVER, fnt);
+}
+
+void rWifiConnect::rDoEnterAuthPort(unsigned short int **fnt, bool invalid)
+{
+    if (activeEditBox)
+        delete activeEditBox;
+    activeEditBox = new rEditBox(invalid ? NetworkSetupText[42] : NetworkSetupText[41], OKCancelText[0], OKCancelText[1], 10, 10, 80, EDITBOX_INPUT_AUTH_PORT, fnt);
 }
 
 void rWifiConnect::rDoAPManualEntry(unsigned short int **fnt)
@@ -683,7 +836,7 @@ void rWifiConnect::rDoWepInvalidDialog(unsigned short int **fnt)
     if (activeDialog)
         delete activeDialog;
 
-    activeDialog = new rDialog(NetworkSetupText[14], OKCancelText[0], NULL, 10, 10, DIALOG_INVALID_WEP, (uint16**)fnt);
+    activeDialog = new rDialog(NetworkSetupText[15], OKCancelText[0], NULL, 10, 10, DIALOG_INVALID_WEP, (uint16**)fnt);
 }
 
 void rWifiConnect::rDoIPInvalidDialog(unsigned short int **fnt)
@@ -737,7 +890,7 @@ void rWifiConnect::rDoSetupCompleteDialog(unsigned short int** fnt)
     if (activeDialog)
         delete activeDialog;
 
-    activeDialog = new rDialog(NetworkSetupText[33], OKCancelText[0], NULL, 10, 10, DIALOG_SETUP_COMPLETE, (uint16**)fnt);
+    activeDialog = new rDialog(NetworkSetupText[34], OKCancelText[0], NULL, 10, 10, DIALOG_SETUP_COMPLETE, (uint16**)fnt);
 }
 
 void rWifiConnect::rScanForAP(void *ptr)
