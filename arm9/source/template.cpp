@@ -107,6 +107,7 @@ int main(void) {
     keyboard = new rKeyboard();
     clock = new rClock();
     client = new rTOC2();
+	initWifi();
     chatwnd->rSetTOC(&client);
     chatwnd->rSetFont((uint16**)font_arial_8);
     chatwnd->rSetStatus(STATUS_NOTOC);
