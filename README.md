@@ -58,3 +58,5 @@
 - Currently a limit of 20 conversations at one time. If you have more than that then you are too popular to use DSAIM.
 
 - The keyboard is fairly accurate, but sometimes it makes mistakes.
+
+Tested with libnds v2.0.2.
